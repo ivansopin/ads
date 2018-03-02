@@ -250,20 +250,18 @@ def _resolve(selector, project, service_sets_by_name, selector_stack):
             (stack_as_list[0], " -> ".join(stack_as_list)))
 
     if selector == "all":
-        return frozenset(project.services_by_name.keys())
+        return list(project.services_by_name.keys())
 
     if selector in project.services_by_name:
-        return frozenset([project.services_by_name[selector].name])
+        return list([project.services_by_name[selector].name])
 
     if selector in service_sets_by_name:
         selector_stack[selector] = True
-        sub_results = map(lambda s: _resolve(s,
-                                             project,
-                                             service_sets_by_name,
-                                             selector_stack),
-                          service_sets_by_name[selector].selectors)
+        sub_results = []
+        for s in service_sets_by_name[selector].selectors:
+            sub_results.extend(_resolve(s, project, service_sets_by_name, selector_stack))
         selector_stack.popitem(True)
-        return frozenset(reduce(frozenset.__or__, sub_results))
+        return sub_results
 
     stack_as_list = list(selector_stack) + [selector]
     raise BadSelectorException(
@@ -701,14 +699,15 @@ def _resolve_selectors(ads, selectors, fail_if_empty):
         selectors = ["default"]
 
     try:
-        service_names = reduce(frozenset.__or__,
-                               [ads.resolve(s) for s in selectors])
+        service_names = []
+        for s in selectors:
+            service_names.extend(ads.resolve(s))
     except BadSelectorException as e:
         raise NotFound(str(e))
 
     services = map(
         lambda name: ads.project.services_by_name[name],
-        sorted(service_names))
+        service_names)
 
     if fail_if_empty and len(services) == 0:
         raise NotFound("No services found that match '%s'" %
